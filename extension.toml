@@ -1,0 +1,7 @@
+id = "flow-icons"
+name = "Flow Icons"
+description = "Beautiful file icons for Zed"
+version = "1.0.0"
+schema_version = 1
+authors = ["thang-nm", "Benjamin Halko"]
+repository = "https://github.com/BenjaminHalko/flow-icons-zed"

@@ -1,0 +1,10 @@
+# Python Virtual Environment
+.venv
+
+# MacOS
+.DS_Store
+
+# Flow Icon files
+icon_themes/*
+icons/*
+.icon-version
