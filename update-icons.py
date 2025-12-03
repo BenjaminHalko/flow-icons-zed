@@ -139,6 +139,22 @@ def build_file_icons(icons_folder, folder_name):
     return file_icons
 
 
+def add_case_variations(mapping):
+    """Add case variations (lowercase, uppercase, capitalized) for all keys."""
+    result = dict(mapping)
+    for key, value in list(mapping.items()):
+        # Add lowercase
+        result[key.lower()] = value
+        result[key.capitalize()] = value
+        if "." in key:
+            stem, ext = key.rsplit(".", 1)
+            result[f"{stem.upper()}.{ext.lower()}"] = value
+        else:
+            result[key.upper()] = value
+
+    return result
+
+
 def build_theme_from_vscode_json(vscode_theme_path, folder_name, icons_folder):
     """Build Zed theme mappings from VSCode theme JSON."""
     if not vscode_theme_path.exists():
@@ -147,11 +163,11 @@ def build_theme_from_vscode_json(vscode_theme_path, folder_name, icons_folder):
     with open(vscode_theme_path) as f:
         vscode_theme = json.load(f)
 
-    # Extract file extensions mapping
-    file_suffixes = dict(vscode_theme.get("fileExtensions", {}))
+    # Extract file extensions mapping (with case variations)
+    file_suffixes = add_case_variations(vscode_theme.get("fileExtensions", {}))
 
-    # Extract file names mapping
-    file_stems = dict(vscode_theme.get("fileNames", {}))
+    # Extract file names mapping (with case variations)
+    file_stems = add_case_variations(vscode_theme.get("fileNames", {}))
 
     # Extract folder names mapping
     folder_names = vscode_theme.get("folderNames", {})
@@ -162,10 +178,15 @@ def build_theme_from_vscode_json(vscode_theme_path, folder_name, icons_folder):
         expanded_id = folder_names_expanded.get(name, f"{icon_id}_open")
         # Only add if icons exist
         if (icons_folder / f"{icon_id}.png").exists():
-            named_directory_icons[name] = {
+            icon_entry = {
                 "collapsed": f"./icons/{folder_name}/{icon_id}.png",
                 "expanded": f"./icons/{folder_name}/{expanded_id}.png",
             }
+            # Add case variations for folder names
+            named_directory_icons[name] = icon_entry
+            named_directory_icons[name.lower()] = icon_entry
+            named_directory_icons[name.upper()] = icon_entry
+            named_directory_icons[name.capitalize()] = icon_entry
 
     return file_suffixes, file_stems, named_directory_icons
 
