@@ -475,6 +475,7 @@ async function main() {
         console.log(`${C.green}OK${C.nc} (${sizeMb}M)`);
 
         process.stdout.write("Extracting icons... ");
+        fs.rmSync(ICONS_DIR, { recursive: true, force: true });
         fs.mkdirSync(ICONS_DIR, { recursive: true });
         extractIcons(compressedData, ICONS_DIR);
         console.log(`${C.green}OK${C.nc}`);
@@ -503,6 +504,7 @@ async function main() {
         console.log(`${C.green}OK${C.nc} (${sizeMb}M)`);
 
         process.stdout.write("Extracting icons... ");
+        fs.rmSync(ICONS_DIR, { recursive: true, force: true });
         fs.mkdirSync(ICONS_DIR, { recursive: true });
         const iconDirs = [
           "deep/",
@@ -547,9 +549,6 @@ async function main() {
       "dim-light",
       "dawn",
       "dawn-light",
-      "deep.json",
-      "dim.json",
-      "dawn.json",
     ]);
     for (const entry of fs.readdirSync(ICONS_DIR)) {
       if (!keepEntries.has(entry)) {
