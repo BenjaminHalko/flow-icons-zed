@@ -1,0 +1,27 @@
+name: Fetch Icons
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Fetch icons
+        run: node update-icons.cjs
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update Flow Icons"
+          file_pattern: "icons/ icon_themes/ .icon-version"
