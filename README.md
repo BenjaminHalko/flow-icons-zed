@@ -7,6 +7,8 @@
   🌼 Flow Icons ported to Zed
 </p>
 
+![Flow Icons Preview](https://raw.githubusercontent.com/thang-nm/Flow-Icons/main/preview.png)
+
 ## Installation
 
 Download the Extension using:
