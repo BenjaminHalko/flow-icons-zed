@@ -1,0 +1,25 @@
+{
+  "$schema": "./config.schema.json",
+
+  "folderColor": "gray",
+
+  "specificFolders": true,
+
+  "filesReplacements": {
+    "rust": "rust-alt",
+    "kotlin": "kotlin-alt"
+  },
+
+  "foldersReplacements": {
+    "components": "react-components"
+  },
+
+  "filesAssociations": {
+    "*.tss": "typescript",
+    "tailwind.css": "tailwindcss"
+  },
+
+  "foldersAssociations": {
+    "store": "resource"
+  }
+}

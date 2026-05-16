@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Flow Icons for Zed - Configuration",
+  "description": "Customize how Flow Icons renders in Zed. After editing, run `node update-icons.cjs` to rebuild the icon theme and restart Zed.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema reference for editor autocomplete."
+    },
+    "folderColor": {
+      "type": "string",
+      "description": "Default folder color. Each palette ships a matching folder_<color>{,_open}.svg used for unnamed directories.",
+      "enum": [
+        "gray",
+        "blue",
+        "brown",
+        "green",
+        "lime",
+        "orange",
+        "pink",
+        "purple",
+        "red",
+        "sky",
+        "teal",
+        "yellow"
+      ],
+      "default": "gray"
+    },
+    "specificFolders": {
+      "type": "boolean",
+      "description": "If false, all directories use the default folder icon (no per-name folder icons like `src`, `tests`, `components`).",
+      "default": true
+    },
+    "filesReplacements": {
+      "type": "object",
+      "description": "Swap one file icon for another - typically used to opt into '-alt' variants. Keys and values may use either hyphens or underscores (`rust-alt` and `rust_alt` are equivalent). Both icons must exist as SVGs in each palette folder.",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [
+        {
+          "rust": "rust-alt",
+          "kotlin": "kotlin-alt",
+          "go": "go-alt"
+        }
+      ]
+    },
+    "foldersReplacements": {
+      "type": "object",
+      "description": "Swap one folder icon for another. Keys are the icon's base name without the `folder_` prefix (e.g. `components`, not `folder_components`). Both icons must exist as `folder_<name>{,_open}.svg` in each palette folder.",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [
+        {
+          "components": "react-components"
+        }
+      ]
+    },
+    "filesAssociations": {
+      "type": "object",
+      "description": "Map a file extension or filename to a specific icon. Compatible with Material Icon Theme syntax: `*.ext` for extensions, plain text for exact filenames, `dir/...` for paths inside a folder. Set the value to an empty string to remove an existing association.",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [
+        {
+          "*.tss": "typescript",
+          "tailwind.css": "tailwindcss",
+          "src/index.js": "javascript-other",
+          "package.json": ""
+        }
+      ]
+    },
+    "foldersAssociations": {
+      "type": "object",
+      "description": "Map a folder name to a specific icon. The value is the folder icon's base name (without the `folder_` prefix). Set the value to an empty string to remove an existing association.",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [
+        {
+          "store": "resource",
+          "data": ""
+        }
+      ]
+    }
+  }
+}

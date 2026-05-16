@@ -26,3 +26,16 @@ If you want to use the premium icon set, then you will need to run the script to
 ```bash
 node update-icons.cjs <FLOW_ICONS_LICENSE>
 ```
+
+## Customization
+
+You can customize which icons appear for files and folders by creating a `config.json` in the repo root
+
+| Setting | Purpose |
+| --- | --- |
+| `folderColor` | Default folder color: `gray`, `blue`, `brown`, `green`, `lime`, `orange`, `pink`, `purple`, `red`, `sky`, `teal`, `yellow` |
+| `specificFolders` | If `false`, all directories use the default folder icon (no per-name icons like `src`, `tests`, `components`) |
+| `filesReplacements` | Swap one file icon for another, typically an `-alt` variant: `{ "rust": "rust-alt", "kotlin": "kotlin-alt" }` |
+| `foldersReplacements` | Swap one folder icon for another: `{ "components": "react-components" }` |
+| `filesAssociations` | Map extensions or filenames to icons (Material-Icons syntax: `*.tss`, `tailwind.css`, `src/index.js`). Empty string removes an association |
+| `foldersAssociations` | Map folder names to icons: `{ "store": "resource" }`. Empty string removes |

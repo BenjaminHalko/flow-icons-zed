@@ -25,6 +25,7 @@ const SCRIPT_DIR = __dirname;
 const ICONS_DIR = path.join(SCRIPT_DIR, "icons");
 const THEME_DIR = path.join(SCRIPT_DIR, "icon_themes");
 const VERSION_FILE = path.join(SCRIPT_DIR, ".icon-version");
+const CONFIG_FILE = path.join(SCRIPT_DIR, "config.json");
 const USER_AGENT = "Flow Icons";
 const API_BASE = "https://legit-i9lq.onrender.com/flow-icons";
 
@@ -42,6 +43,25 @@ const C = {
 
 function getMachineId() {
   return crypto.createHash("md5").update(os.hostname()).digest("hex");
+}
+
+// Match the original VS Code extension: users may write either hyphen or
+// underscore form (e.g. "rust-alt" or "rust_alt"). SVG filenames on disk use
+// underscores, so we normalize to that form when looking icons up.
+function normalizeIconName(name) {
+  return (name || "").replace(/-/g, "_");
+}
+
+function loadConfig() {
+  if (!fs.existsSync(CONFIG_FILE)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+  } catch (e) {
+    console.log(
+      `${C.yellow}Warning: failed to parse config.json (${e.message}); ignoring${C.nc}`,
+    );
+    return null;
+  }
 }
 
 function httpGet(url, headers) {
@@ -311,17 +331,71 @@ function addCaseVariations(mapping) {
   return result;
 }
 
-function buildThemeFromVscodeJson(vscodeThemePath, folderName, iconsFolder) {
+function buildThemeFromVscodeJson(
+  vscodeThemePath,
+  folderName,
+  iconsFolder,
+  config,
+) {
   if (!fs.existsSync(vscodeThemePath)) {
     return { fileSuffixes: {}, fileStems: {}, namedDirs: {} };
   }
 
   const vscodeTheme = JSON.parse(fs.readFileSync(vscodeThemePath, "utf8"));
-  const fileSuffixes = addCaseVariations(vscodeTheme.fileExtensions || {});
-  const fileStems = addCaseVariations(vscodeTheme.fileNames || {});
+  const fileExtensions = { ...(vscodeTheme.fileExtensions || {}) };
+  const fileNames = { ...(vscodeTheme.fileNames || {}) };
+  const folderNames = { ...(vscodeTheme.folderNames || {}) };
+  const folderNamesExpanded = { ...(vscodeTheme.folderNamesExpanded || {}) };
 
-  const folderNames = vscodeTheme.folderNames || {};
-  const folderNamesExpanded = vscodeTheme.folderNamesExpanded || {};
+  // Apply file replacements: anywhere "<src>" icon ID was used, swap to "<target>".
+  // Mirrors the original VS Code extension's flow-icons.files.replacements.
+  for (const [rawSrc, rawTarget] of Object.entries(
+    config?.filesReplacements || {},
+  )) {
+    const src = normalizeIconName(rawSrc);
+    const target = normalizeIconName(rawTarget);
+    if (!src || !target) continue;
+    if (!fs.existsSync(path.join(iconsFolder, `${target}.svg`))) {
+      console.log(
+        `${C.yellow}  filesReplacements ${rawSrc} -> ${rawTarget}: missing ${target}.svg in ${folderName}, skipped${C.nc}`,
+      );
+      continue;
+    }
+    for (const [k, v] of Object.entries(fileExtensions)) {
+      if (v === src) fileExtensions[k] = target;
+    }
+    for (const [k, v] of Object.entries(fileNames)) {
+      if (v === src) fileNames[k] = target;
+    }
+  }
+
+  // Apply folder replacements: values in folderNames are "folder_<id>" form.
+  for (const [rawSrc, rawTarget] of Object.entries(
+    config?.foldersReplacements || {},
+  )) {
+    const src = normalizeIconName(rawSrc);
+    const target = normalizeIconName(rawTarget);
+    if (!src || !target) continue;
+    if (!fs.existsSync(path.join(iconsFolder, `folder_${target}.svg`))) {
+      console.log(
+        `${C.yellow}  foldersReplacements ${rawSrc} -> ${rawTarget}: missing folder_${target}.svg in ${folderName}, skipped${C.nc}`,
+      );
+      continue;
+    }
+    const srcFolder = `folder_${src}`;
+    const targetFolder = `folder_${target}`;
+    const srcExpanded = `${srcFolder}_open`;
+    const targetExpanded = `${targetFolder}_open`;
+    for (const [k, v] of Object.entries(folderNames)) {
+      if (v === srcFolder) folderNames[k] = targetFolder;
+    }
+    for (const [k, v] of Object.entries(folderNamesExpanded)) {
+      if (v === srcExpanded) folderNamesExpanded[k] = targetExpanded;
+    }
+  }
+
+  const fileSuffixes = addCaseVariations(fileExtensions);
+  const fileStems = addCaseVariations(fileNames);
 
   const namedDirs = {};
   for (const [name, iconId] of Object.entries(folderNames)) {
@@ -341,8 +415,102 @@ function buildThemeFromVscodeJson(vscodeThemePath, folderName, iconsFolder) {
   return { fileSuffixes, fileStems, namedDirs };
 }
 
+// Parse a Material-Icons-style association key (e.g. "*.tss", "tailwind.css",
+// "src/index.js", "src/*.index") into { dir, pattern, isExt }.
+function parseAssociationKey(key) {
+  let dir = "";
+  let pattern = key;
+  if (pattern.includes("/")) {
+    const idx = pattern.lastIndexOf("/");
+    dir = pattern.slice(0, idx);
+    pattern = pattern.slice(idx + 1);
+  }
+  let isExt = false;
+  if (pattern.startsWith("**.")) {
+    pattern = pattern.slice(3);
+    isExt = true;
+  } else if (pattern.startsWith("*.")) {
+    pattern = pattern.slice(2);
+    isExt = true;
+  }
+  const finalKey = dir ? `${dir}/${pattern}` : pattern;
+  return { finalKey, isExt };
+}
+
+function applyConfigToTheme(theme, config, folderName, iconsFolder) {
+  if (!config) return;
+
+  // folderColor: rewrite the default directory icon to the chosen color.
+  if (config.folderColor && typeof config.folderColor === "string") {
+    const color = config.folderColor;
+    const collapsedSvg = path.join(iconsFolder, `folder_${color}.svg`);
+    const expandedSvg = path.join(iconsFolder, `folder_${color}_open.svg`);
+    if (fs.existsSync(collapsedSvg) && fs.existsSync(expandedSvg)) {
+      theme.directory_icons = {
+        collapsed: `./icons/${folderName}/folder_${color}.svg`,
+        expanded: `./icons/${folderName}/folder_${color}_open.svg`,
+      };
+    } else {
+      console.log(
+        `${C.yellow}  folderColor "${color}": SVG missing in ${folderName}, kept default${C.nc}`,
+      );
+    }
+  }
+
+  // specificFolders=false: drop per-name folder icons entirely.
+  if (config.specificFolders === false) {
+    theme.named_directory_icons = {};
+  }
+
+  // filesAssociations: add/replace/remove entries in file_suffixes / file_stems.
+  for (const [key, rawValue] of Object.entries(
+    config.filesAssociations || {},
+  )) {
+    if (!key) continue;
+    const target = normalizeIconName(String(rawValue));
+    const { finalKey, isExt } = parseAssociationKey(key);
+    const bucket = isExt ? theme.file_suffixes : theme.file_stems;
+    if (!target) {
+      delete bucket[finalKey];
+      continue;
+    }
+    bucket[finalKey] = target;
+  }
+
+  // foldersAssociations: add/replace/remove entries in named_directory_icons.
+  if (theme.named_directory_icons) {
+    for (const [key, rawValue] of Object.entries(
+      config.foldersAssociations || {},
+    )) {
+      if (!key) continue;
+      const target = normalizeIconName(String(rawValue));
+      if (!target) {
+        delete theme.named_directory_icons[key];
+        continue;
+      }
+      const collapsedId = `folder_${target}`;
+      const expandedId = `${collapsedId}_open`;
+      if (!fs.existsSync(path.join(iconsFolder, `${collapsedId}.svg`))) {
+        console.log(
+          `${C.yellow}  foldersAssociations ${key} -> ${rawValue}: missing ${collapsedId}.svg in ${folderName}, skipped${C.nc}`,
+        );
+        continue;
+      }
+      theme.named_directory_icons[key] = {
+        collapsed: `./icons/${folderName}/${collapsedId}.svg`,
+        expanded: `./icons/${folderName}/${expandedId}.svg`,
+      };
+    }
+  }
+}
+
 function buildFlowIconsJson() {
   fs.mkdirSync(THEME_DIR, { recursive: true });
+
+  const config = loadConfig();
+  if (config) {
+    console.log(`${C.green}Loaded config.json${C.nc}`);
+  }
 
   const palettes = [
     { folder: "deep", name: "Flow Deep", appearance: "dark" },
@@ -379,9 +547,10 @@ function buildFlowIconsJson() {
       vscodeJson,
       folder,
       iconsFolder,
+      config,
     );
 
-    themes.push({
+    const theme = {
       name,
       appearance,
       directory_icons: {
@@ -392,7 +561,11 @@ function buildFlowIconsJson() {
       file_suffixes: fileSuffixes,
       file_stems: fileStems,
       named_directory_icons: namedDirs,
-    });
+    };
+
+    applyConfigToTheme(theme, config, folder, iconsFolder);
+
+    themes.push(theme);
   }
 
   const zedTheme = {
@@ -441,6 +614,16 @@ async function main() {
     process.exit(1);
   }
 
+  // If the source VS Code theme JSONs aren't on disk, we can't rebuild without
+  // re-downloading - older versions of this script deleted them. Drop the
+  // recorded version so the normal version-mismatch path triggers a refresh.
+  const sourceJsonsExist = ["deep.json", "dim.json", "dawn.json"].every((f) =>
+    fs.existsSync(path.join(ICONS_DIR, f)),
+  );
+  if (!sourceJsonsExist && fs.existsSync(VERSION_FILE)) {
+    fs.rmSync(VERSION_FILE, { force: true });
+  }
+
   const currentVersion = getCurrentVersion();
   let remoteVersion;
   let downloadSuccess = false;
@@ -465,8 +648,9 @@ async function main() {
     }
 
     if (currentVersion === remoteVersion) {
-      console.log(`${C.green}Already up to date!${C.nc}`);
-      return;
+      console.log(
+        `${C.green}Icons up to date, rebuilding theme from existing icons${C.nc}`,
+      );
     } else {
       process.stdout.write("Downloading premium icons... ");
       try {
@@ -494,8 +678,9 @@ async function main() {
     remoteVersion = extensionVersion;
 
     if (currentVersion === remoteVersion) {
-      console.log(`${C.green}Already up to date!${C.nc}`);
-      return;
+      console.log(
+        `${C.green}Icons up to date, rebuilding theme from existing icons${C.nc}`,
+      );
     } else {
       process.stdout.write("Downloading VSIX... ");
       try {
@@ -541,7 +726,9 @@ async function main() {
   let themePath;
   try {
     themePath = buildFlowIconsJson();
-    // Clean up anything that isn't an icon folder or theme JSON
+    // Clean up anything that isn't an icon folder or a VS Code source theme JSON.
+    // The source theme JSONs (deep/dim/dawn.json) are kept so subsequent runs can
+    // rebuild from a changed config.json without re-downloading.
     const keepEntries = new Set([
       "deep",
       "deep-light",
@@ -549,6 +736,9 @@ async function main() {
       "dim-light",
       "dawn",
       "dawn-light",
+      "deep.json",
+      "dim.json",
+      "dawn.json",
     ]);
     for (const entry of fs.readdirSync(ICONS_DIR)) {
       if (!keepEntries.has(entry)) {
