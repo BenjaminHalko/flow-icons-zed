@@ -29,7 +29,7 @@ node update-icons.cjs <FLOW_ICONS_LICENSE>
 
 ## Customization
 
-You can customize which icons appear for files and folders by creating a `config.json` in the repo root
+You can customize which icons appear for files and folders by creating a `config.json` in the repo root, and then running `update-icons`
 
 | Setting | Purpose |
 | --- | --- |
