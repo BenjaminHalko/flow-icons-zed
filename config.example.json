@@ -5,6 +5,14 @@
 
   "specificFolders": true,
 
+  "activeIconPack": {
+    "angular": true,
+    "bashly": true,
+    "nest": false,
+    "next": true,
+    "roblox": true
+  },
+
   "filesReplacements": {
     "rust": "rust-alt",
     "kotlin": "kotlin-alt"

@@ -53,11 +53,30 @@ You can customize which icons appear for files and folders by creating a `config
 | --- | --- |
 | `folderColor` | Default folder color: `gray`, `blue`, `brown`, `green`, `lime`, `orange`, `pink`, `purple`, `red`, `sky`, `teal`, `yellow` |
 | `specificFolders` | If `false`, all directories use the default folder icon (no per-name icons like `src`, `tests`, `components`) |
+| `activeIconPack` | Turn icon packs on or off. Same shape as the VS Code [`flow-icons.activeIconPack`](https://github.com/thang-nm/Flow-Icons#toggle-icon-packs) setting |
 | `filesReplacements` | Swap one file icon for another, typically an `-alt` variant: `{ "rust": "rust-alt", "kotlin": "kotlin-alt" }` |
 | `foldersReplacements` | Swap one folder icon for another: `{ "components": "react-components" }` |
 | `filesAssociations` | Map extensions or filenames to icons (Material-Icons syntax: `*.tss`, `tailwind.css`, `src/index.js`). Empty string removes an association |
 | `foldersAssociations` | Map folder names to icons: `{ "store": "resource" }`. Empty string removes |
 | `youColors` | Color palette for the **Flow You** theme — see below |
+
+### Icon packs
+
+`activeIconPack` enables extra file icons for a framework. Defaults match the VS Code extension: Angular, Bashly, Next, and Roblox are on; Nest is off. Enable Nest only when Angular is off — both packs claim the same filenames (`*.controller.ts`, `*.service.ts`, and similar).
+
+```jsonc
+{
+  "activeIconPack": {
+    "angular": true,
+    "bashly": true,
+    "nest": false,
+    "next": true,
+    "roblox": true
+  }
+}
+```
+
+These icons are part of the premium set. With the demo icons, the packs stay enabled in config but have nothing extra to merge. Download the premium icons with `node update-icons.cjs <license>`, then rebuild.
 
 ### Flow You
 
