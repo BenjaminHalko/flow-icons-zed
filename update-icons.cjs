@@ -26,6 +26,13 @@ const ICONS_DIR = path.join(SCRIPT_DIR, "icons");
 const THEME_DIR = path.join(SCRIPT_DIR, "icon_themes");
 const VERSION_FILE = path.join(SCRIPT_DIR, ".icon-version");
 const CONFIG_FILE = path.join(SCRIPT_DIR, "config.json");
+// Association source + pack manifests shipped beside the SVGs. `icons.json`
+// is the always-on set; `define.json` holds associations that only apply when
+// an icon pack is enabled; `settings.json` lists which icon ids belong to
+// each pack. Mirrors the VS Code extension.
+const ICONS_MANIFEST = path.join(ICONS_DIR, "icons.json");
+const DEFINE_MANIFEST = path.join(ICONS_DIR, "define.json");
+const PACK_SETTINGS_FILE = path.join(ICONS_DIR, "settings.json");
 const USER_AGENT = "Flow Icons";
 const API_BASE = "https://legit-i9lq.onrender.com/flow-icons";
 
@@ -140,6 +147,239 @@ function loadConfig() {
     );
     return null;
   }
+}
+
+function readJsonIfExists(file) {
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    console.log(
+      `${C.yellow}Warning: failed to parse ${path.basename(file)} (${e.message}); ignoring${C.nc}`,
+    );
+    return null;
+  }
+}
+
+// Public pack list from https://github.com/thang-nm/Flow-Icons/blob/main/settings.json
+// Used when the downloaded icon set has no settings.json of its own.
+const DEFAULT_PACK_SETTINGS = {
+  defaults: {
+    packs: {
+      angular: true,
+      bashly: true,
+      nest: false,
+      next: true,
+      roblox: true,
+    },
+  },
+  packs: {
+    angular: [
+      "angular_component",
+      "angular_controller",
+      "angular_directive",
+      "angular_guard",
+      "angular_interceptor",
+      "angular_interface",
+      "angular_module",
+      "angular_pipe",
+      "angular_routing",
+      "angular_service",
+    ],
+    bashly: ["bashly_hook"],
+    nest: [
+      "nest_controller",
+      "nest_dto",
+      "nest_entity",
+      "nest_guard",
+      "nest_interceptor",
+      "nest_interface",
+      "nest_middleware",
+      "nest_module",
+      "nest_pipe",
+      "nest_repository",
+      "nest_service",
+    ],
+    next: [
+      "next_js_error",
+      "next_js_layout",
+      "next_js_loading",
+      "next_js_not_found",
+      "next_js_page",
+      "next_js_route",
+      "next_js_template",
+      "next_jsx_error",
+      "next_jsx_layout",
+      "next_jsx_loading",
+      "next_jsx_not_found",
+      "next_jsx_page",
+      "next_jsx_template",
+      "next_ts_error",
+      "next_ts_layout",
+      "next_ts_loading",
+      "next_ts_not_found",
+      "next_ts_page",
+      "next_ts_route",
+      "next_ts_template",
+    ],
+    roblox: ["rojo"],
+  },
+};
+
+function resolveActiveIconPacks(config, packSettings) {
+  const defaults = {
+    ...DEFAULT_PACK_SETTINGS.defaults.packs,
+    ...(packSettings?.defaults?.packs || {}),
+  };
+  const active = { ...defaults };
+  for (const [name, enabled] of Object.entries(config?.activeIconPack || {})) {
+    if (typeof enabled === "boolean") active[name] = enabled;
+  }
+  return active;
+}
+
+// Copy enabled pack associations from define.json onto the base manifest.
+// Same rule as the VS Code extension: a pack icon id that starts with
+// `folder_` is a folder association; everything else is a file association.
+// Packs are applied in settings order, so when angular and nest are both on,
+// nest wins for filenames they both claim.
+function mergeActiveIconPacks(
+  files,
+  folders,
+  defineManifest,
+  packSettings,
+  active,
+  iconsFolder,
+  explicitPacks,
+  warnings,
+) {
+  const defineFiles = defineManifest?.files || {};
+  const defineFolders = defineManifest?.folders || {};
+  const packIcons = {
+    ...DEFAULT_PACK_SETTINGS.packs,
+    ...(packSettings?.packs || {}),
+  };
+  const unavailable = [];
+
+  for (const [pack, enabled] of Object.entries(active)) {
+    if (enabled !== true) continue;
+    const ids = packIcons[pack];
+    if (!ids) {
+      if (explicitPacks[pack] === true) {
+        warnings.add(`Unknown icon pack "${pack}"`);
+      }
+      continue;
+    }
+
+    let applied = 0;
+    for (const rawId of ids) {
+      const iconId = normalizeIconName(rawId);
+      if (!iconId) continue;
+      if (iconId.startsWith("folder_")) {
+        const folderId = iconId.slice("folder_".length);
+        const def = defineFolders[folderId];
+        if (!def) continue;
+        if (!fs.existsSync(path.join(iconsFolder, `folder_${folderId}.svg`))) {
+          warnings.add(
+            `Icon pack "${pack}": missing folder_${folderId}.svg, skipped`,
+          );
+          continue;
+        }
+        folders[folderId] = def;
+        applied++;
+      } else {
+        const def = defineFiles[iconId];
+        if (!def) continue;
+        if (!fs.existsSync(path.join(iconsFolder, `${iconId}.svg`))) {
+          warnings.add(`Icon pack "${pack}": missing ${iconId}.svg, skipped`);
+          continue;
+        }
+        files[iconId] = def;
+        applied++;
+      }
+    }
+
+    if (applied === 0 && explicitPacks[pack] === true) unavailable.push(pack);
+  }
+
+  if (unavailable.length) {
+    warnings.add(
+      `Icon packs ${unavailable.join(", ")} are enabled, but this icon set does not include their icons. Pack icons ship with the premium download.`,
+    );
+  }
+}
+
+// Move a manifest entry's associations onto another icon id. Names already
+// attached to the target stay, so `components` -> `react-components` retargets
+// the components folders without dropping react / jsx.
+function retargetManifestEntry(table, src, target) {
+  const data = table[src];
+  delete table[src];
+  const existing = table[target];
+  if (!existing) {
+    table[target] = data;
+    return;
+  }
+  table[target] = {
+    l: [...(existing.l || []), ...(data.l || [])],
+    e: [...(existing.e || []), ...(data.e || [])],
+    n: [...(existing.n || []), ...(data.n || [])],
+  };
+}
+
+function applyManifestReplacements(files, folders, config, iconsFolder, folderName) {
+  for (const [rawSrc, rawTarget] of Object.entries(
+    config?.filesReplacements || {},
+  )) {
+    const src = normalizeIconName(rawSrc);
+    const target = normalizeIconName(rawTarget);
+    if (!src || !target || !files[src]) continue;
+    if (!fs.existsSync(path.join(iconsFolder, `${target}.svg`))) {
+      console.log(
+        `${C.yellow}  filesReplacements ${rawSrc} -> ${rawTarget}: missing ${target}.svg in ${folderName}, skipped${C.nc}`,
+      );
+      continue;
+    }
+    retargetManifestEntry(files, src, target);
+  }
+
+  for (const [rawSrc, rawTarget] of Object.entries(
+    config?.foldersReplacements || {},
+  )) {
+    const src = normalizeIconName(rawSrc);
+    const target = normalizeIconName(rawTarget);
+    if (!src || !target || !folders[src]) continue;
+    if (!fs.existsSync(path.join(iconsFolder, `folder_${target}.svg`))) {
+      console.log(
+        `${C.yellow}  foldersReplacements ${rawSrc} -> ${rawTarget}: missing folder_${target}.svg in ${folderName}, skipped${C.nc}`,
+      );
+      continue;
+    }
+    retargetManifestEntry(folders, src, target);
+  }
+}
+
+function expandManifest(files, folders) {
+  const fileExtensions = {};
+  const fileNames = {};
+  const folderNames = {};
+  const folderNamesExpanded = {};
+
+  for (const [iconId, data] of Object.entries(files)) {
+    if (!data) continue;
+    for (const ext of data.e || []) fileExtensions[ext] = iconId;
+    for (const name of data.n || []) fileNames[name] = iconId;
+  }
+  for (const [folderId, data] of Object.entries(folders)) {
+    if (!data) continue;
+    const collapsed = `folder_${folderId}`;
+    const expanded = `${collapsed}_open`;
+    for (const name of data.n || []) {
+      folderNames[name] = collapsed;
+      folderNamesExpanded[name] = expanded;
+    }
+  }
+  return { fileExtensions, fileNames, folderNames, folderNamesExpanded };
 }
 
 function httpGet(url, headers) {
@@ -617,62 +857,87 @@ function buildThemeFromVscodeJson(
   folderName,
   iconsFolder,
   config,
+  packContext,
 ) {
-  if (!fs.existsSync(vscodeThemePath)) {
+  let fileExtensions;
+  let fileNames;
+  let folderNames;
+  let folderNamesExpanded;
+
+  // Prefer icons.json + define.json so activeIconPack can add or omit pack
+  // associations. The prebuilt palette JSON is the fallback for icon sets
+  // downloaded before those manifests were kept.
+  if (packContext?.iconsManifest) {
+    const files = { ...(packContext.iconsManifest.files || {}) };
+    const folders = { ...(packContext.iconsManifest.folders || {}) };
+    mergeActiveIconPacks(
+      files,
+      folders,
+      packContext.defineManifest,
+      packContext.packSettings,
+      packContext.active,
+      iconsFolder,
+      packContext.explicitPacks,
+      packContext.warnings,
+    );
+    applyManifestReplacements(files, folders, config, iconsFolder, folderName);
+    ({ fileExtensions, fileNames, folderNames, folderNamesExpanded } =
+      expandManifest(files, folders));
+  } else if (fs.existsSync(vscodeThemePath)) {
+    const vscodeTheme = JSON.parse(fs.readFileSync(vscodeThemePath, "utf8"));
+    fileExtensions = { ...(vscodeTheme.fileExtensions || {}) };
+    fileNames = { ...(vscodeTheme.fileNames || {}) };
+    folderNames = { ...(vscodeTheme.folderNames || {}) };
+    folderNamesExpanded = { ...(vscodeTheme.folderNamesExpanded || {}) };
+
+    // Apply file replacements: anywhere "<src>" icon ID was used, swap to "<target>".
+    // Mirrors the original VS Code extension's flow-icons.files.replacements.
+    for (const [rawSrc, rawTarget] of Object.entries(
+      config?.filesReplacements || {},
+    )) {
+      const src = normalizeIconName(rawSrc);
+      const target = normalizeIconName(rawTarget);
+      if (!src || !target) continue;
+      if (!fs.existsSync(path.join(iconsFolder, `${target}.svg`))) {
+        console.log(
+          `${C.yellow}  filesReplacements ${rawSrc} -> ${rawTarget}: missing ${target}.svg in ${folderName}, skipped${C.nc}`,
+        );
+        continue;
+      }
+      for (const [k, v] of Object.entries(fileExtensions)) {
+        if (v === src) fileExtensions[k] = target;
+      }
+      for (const [k, v] of Object.entries(fileNames)) {
+        if (v === src) fileNames[k] = target;
+      }
+    }
+
+    // Apply folder replacements: values in folderNames are "folder_<id>" form.
+    for (const [rawSrc, rawTarget] of Object.entries(
+      config?.foldersReplacements || {},
+    )) {
+      const src = normalizeIconName(rawSrc);
+      const target = normalizeIconName(rawTarget);
+      if (!src || !target) continue;
+      if (!fs.existsSync(path.join(iconsFolder, `folder_${target}.svg`))) {
+        console.log(
+          `${C.yellow}  foldersReplacements ${rawSrc} -> ${rawTarget}: missing folder_${target}.svg in ${folderName}, skipped${C.nc}`,
+        );
+        continue;
+      }
+      const srcFolder = `folder_${src}`;
+      const targetFolder = `folder_${target}`;
+      const srcExpanded = `${srcFolder}_open`;
+      const targetExpanded = `${targetFolder}_open`;
+      for (const [k, v] of Object.entries(folderNames)) {
+        if (v === srcFolder) folderNames[k] = targetFolder;
+      }
+      for (const [k, v] of Object.entries(folderNamesExpanded)) {
+        if (v === srcExpanded) folderNamesExpanded[k] = targetExpanded;
+      }
+    }
+  } else {
     return { fileSuffixes: {}, fileStems: {}, namedDirs: {} };
-  }
-
-  const vscodeTheme = JSON.parse(fs.readFileSync(vscodeThemePath, "utf8"));
-  const fileExtensions = { ...(vscodeTheme.fileExtensions || {}) };
-  const fileNames = { ...(vscodeTheme.fileNames || {}) };
-  const folderNames = { ...(vscodeTheme.folderNames || {}) };
-  const folderNamesExpanded = { ...(vscodeTheme.folderNamesExpanded || {}) };
-
-  // Apply file replacements: anywhere "<src>" icon ID was used, swap to "<target>".
-  // Mirrors the original VS Code extension's flow-icons.files.replacements.
-  for (const [rawSrc, rawTarget] of Object.entries(
-    config?.filesReplacements || {},
-  )) {
-    const src = normalizeIconName(rawSrc);
-    const target = normalizeIconName(rawTarget);
-    if (!src || !target) continue;
-    if (!fs.existsSync(path.join(iconsFolder, `${target}.svg`))) {
-      console.log(
-        `${C.yellow}  filesReplacements ${rawSrc} -> ${rawTarget}: missing ${target}.svg in ${folderName}, skipped${C.nc}`,
-      );
-      continue;
-    }
-    for (const [k, v] of Object.entries(fileExtensions)) {
-      if (v === src) fileExtensions[k] = target;
-    }
-    for (const [k, v] of Object.entries(fileNames)) {
-      if (v === src) fileNames[k] = target;
-    }
-  }
-
-  // Apply folder replacements: values in folderNames are "folder_<id>" form.
-  for (const [rawSrc, rawTarget] of Object.entries(
-    config?.foldersReplacements || {},
-  )) {
-    const src = normalizeIconName(rawSrc);
-    const target = normalizeIconName(rawTarget);
-    if (!src || !target) continue;
-    if (!fs.existsSync(path.join(iconsFolder, `folder_${target}.svg`))) {
-      console.log(
-        `${C.yellow}  foldersReplacements ${rawSrc} -> ${rawTarget}: missing folder_${target}.svg in ${folderName}, skipped${C.nc}`,
-      );
-      continue;
-    }
-    const srcFolder = `folder_${src}`;
-    const targetFolder = `folder_${target}`;
-    const srcExpanded = `${srcFolder}_open`;
-    const targetExpanded = `${targetFolder}_open`;
-    for (const [k, v] of Object.entries(folderNames)) {
-      if (v === srcFolder) folderNames[k] = targetFolder;
-    }
-    for (const [k, v] of Object.entries(folderNamesExpanded)) {
-      if (v === srcExpanded) folderNamesExpanded[k] = targetExpanded;
-    }
   }
 
   const fileSuffixes = addCaseVariations(fileExtensions);
@@ -819,6 +1084,18 @@ function buildFlowIconsJson(config) {
     },
   ];
 
+  const packContext = {
+    iconsManifest: readJsonIfExists(ICONS_MANIFEST),
+    defineManifest: readJsonIfExists(DEFINE_MANIFEST) || {
+      files: {},
+      folders: {},
+    },
+    packSettings: readJsonIfExists(PACK_SETTINGS_FILE) || DEFAULT_PACK_SETTINGS,
+    explicitPacks: config?.activeIconPack || {},
+    warnings: new Set(),
+  };
+  packContext.active = resolveActiveIconPacks(config, packContext.packSettings);
+
   const themes = [];
   for (const { folder, name, appearance, themeJson } of palettes) {
     const iconsFolder = path.join(ICONS_DIR, folder);
@@ -831,6 +1108,7 @@ function buildFlowIconsJson(config) {
       folder,
       iconsFolder,
       config,
+      packContext,
     );
 
     const theme = {
@@ -849,6 +1127,10 @@ function buildFlowIconsJson(config) {
     applyConfigToTheme(theme, config, folder, iconsFolder);
 
     themes.push(theme);
+  }
+
+  for (const message of packContext.warnings) {
+    console.log(`${C.yellow}  ${message}${C.nc}`);
   }
 
   const zedTheme = {
@@ -992,13 +1274,15 @@ async function main() {
           "icons/",
         ];
         const themeJsons = ["deep.json", "dim.json", "dawn.json", "you.json"];
+        const manifestJsons = ["icons.json", "define.json", "settings.json"];
         extractZip(
           vsixData,
           ICONS_DIR,
           "extension/",
           (name) =>
             iconDirs.some((d) => name.startsWith(d)) ||
-            themeJsons.includes(name),
+            themeJsons.includes(name) ||
+            manifestJsons.includes(name),
         );
         console.log(`${C.green}OK${C.nc}`);
         downloadSuccess = true;
@@ -1055,6 +1339,9 @@ async function main() {
       "dim.json",
       "dawn.json",
       "you.json",
+      "icons.json",
+      "define.json",
+      "settings.json",
     ]);
     for (const entry of fs.readdirSync(ICONS_DIR)) {
       if (!keepEntries.has(entry)) {
@@ -1093,10 +1380,14 @@ async function main() {
   console.log(`${C.yellow}Restart Zed to see the updated icons.${C.nc}`);
 }
 
-main().then(
-  () => process.exit(0),
-  (e) => {
-    console.error(`${C.red}Unexpected error: ${e.message}${C.nc}`);
-    process.exit(1);
-  },
-);
+module.exports = { buildFlowIconsJson, loadConfig };
+
+if (require.main === module) {
+  main().then(
+    () => process.exit(0),
+    (e) => {
+      console.error(`${C.red}Unexpected error: ${e.message}${C.nc}`);
+      process.exit(1);
+    },
+  );
+}

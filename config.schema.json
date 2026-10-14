@@ -74,6 +74,47 @@
       "description": "If false, all directories use the default folder icon (no per-name folder icons like `src`, `tests`, `components`).",
       "default": true
     },
+    "activeIconPack": {
+      "type": "object",
+      "description": "Toggle icon packs, matching the VS Code `flow-icons.activeIconPack` setting. Each pack adds file icons (Angular components, Next.js pages, NestJS files, Bashly hooks, Rojo). Omitted packs use the defaults below. The Angular and Nest packs claim the same filenames, so enable only one of them. Pack icons are part of the premium icon set; the demo set has no extra pack icons to merge.",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "properties": {
+        "angular": {
+          "type": "boolean",
+          "default": true,
+          "description": "Angular file icons: component, controller, directive, guard, interceptor, interface, module, pipe, routing, service."
+        },
+        "bashly": {
+          "type": "boolean",
+          "default": true,
+          "description": "Bashly hook icon."
+        },
+        "nest": {
+          "type": "boolean",
+          "default": false,
+          "description": "NestJS file icons. Leave false when the Angular pack is enabled; the two packs overlap."
+        },
+        "next": {
+          "type": "boolean",
+          "default": true,
+          "description": "Next.js app-router file icons (page, layout, loading, error, not-found, template, route) for .js, .jsx, and .ts."
+        },
+        "roblox": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rojo project icon."
+        }
+      },
+      "default": {
+        "angular": true,
+        "bashly": true,
+        "nest": false,
+        "next": true,
+        "roblox": true
+      }
+    },
     "filesReplacements": {
       "type": "object",
       "description": "Swap one file icon for another - typically used to opt into '-alt' variants. Keys and values may use either hyphens or underscores (`rust-alt` and `rust_alt` are equivalent). Both icons must exist as SVGs in each palette folder.",
