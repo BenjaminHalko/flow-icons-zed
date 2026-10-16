@@ -1,0 +1,65 @@
+{
+  "defaults": {
+    "packs": {
+      "angular": true,
+      "bashly": true,
+      "nest": false,
+      "next": true,
+      "roblox": true
+    }
+  },
+  "packs": {
+    "angular": [
+      "angular_component",
+      "angular_controller",
+      "angular_directive",
+      "angular_guard",
+      "angular_interceptor",
+      "angular_interface",
+      "angular_module",
+      "angular_pipe",
+      "angular_routing",
+      "angular_service"
+    ],
+    "bashly": ["bashly_hook"],
+    "nest": [
+      "nest_controller",
+      "nest_decorator",
+      "nest_dto",
+      "nest_entity",
+      "nest_filter",
+      "nest_gateway",
+      "nest_guard",
+      "nest_interceptor",
+      "nest_interface",
+      "nest_middleware",
+      "nest_module",
+      "nest_pipe",
+      "nest_repository",
+      "nest_service"
+    ],
+    "next": [
+      "next_js_error",
+      "next_js_layout",
+      "next_js_loading",
+      "next_js_not_found",
+      "next_js_page",
+      "next_js_route",
+      "next_js_template",
+      "next_jsx_error",
+      "next_jsx_layout",
+      "next_jsx_loading",
+      "next_jsx_not_found",
+      "next_jsx_page",
+      "next_jsx_template",
+      "next_ts_error",
+      "next_ts_layout",
+      "next_ts_loading",
+      "next_ts_not_found",
+      "next_ts_page",
+      "next_ts_route",
+      "next_ts_template"
+    ],
+    "roblox": ["rojo"]
+  }
+}
